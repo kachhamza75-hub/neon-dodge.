@@ -2,7 +2,7 @@ name: Build Neon Dodge APK
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   workflow_dispatch:
 
 jobs:
@@ -13,62 +13,78 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Prepare web directory
-        run: |
-          mkdir -p www
-          if [ -f "index.html" ] && [ ! -f "www/index.html" ]; then
-            cp index.html www/index.html
-          fi
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: "20"
+          cache: "npm"
 
-      - name: Setup Java
+      - name: Setup Java 21
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '21'
+          distribution: "temurin"
+          java-version: "21"
 
-      - name: Install Capacitor and AdMob plugin
+      - name: Install dependencies
+        run: npm install
+
+      - name: Ensure Capacitor Android platform exists
         run: |
-          cat << 'EOF' > package.json
-          {
-            "name": "neon-dodge",
-            "version": "1.0.0",
-            "description": "Neon Dodge mobile game",
-            "main": "index.js",
-            "license": "MIT"
-          }
-          EOF
-          npm install @capacitor/core@latest @capacitor/cli@latest @capacitor/android@latest @capacitor-community/admob@latest
-          npx cap init "Neon Dodge" "com.hamza.neondodge" --web-dir=www
-          npx cap add android
-
-      - name: Configure AdMob App ID for testing
-        run: |
-          STRINGS_FILE="android/app/src/main/res/values/strings.xml"
-          MANIFEST_FILE="android/app/src/main/AndroidManifest.xml"
-          TEST_APP_ID="ca-app-pub-3940256099942544~3347511713"
-
-          if [ -f "$STRINGS_FILE" ] && ! grep -q "admob_app_id" "$STRINGS_FILE"; then
-            sed -i "s|</resources>|    <string name=\"admob_app_id\">${TEST_APP_ID}</string>\n</resources>|" "$STRINGS_FILE"
+          if [ ! -d "android" ]; then
+            npx cap add android
           fi
-
-          if [ -f "$MANIFEST_FILE" ] && ! grep -q "com.google.android.gms.ads.APPLICATION_ID" "$MANIFEST_FILE"; then
-            sed -i 's|</application>|        <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="@string/admob_app_id" />\n    </application>|' "$MANIFEST_FILE"
-          fi
-
           npx cap sync android
 
-      - name: Build Debug APK
+      - name: Configure AdMob App ID in Android project
         run: |
-          cd android
-          chmod +x gradlew
-          ./gradlew assembleDebug
+          node -e '
+          const fs = require("fs");
+          const path = require("path");
 
-      - name: Upload APK Artifact
+          const admobAppId = "ca-app-pub-9252965845144085~9905485493";
+          const stringsPath = path.join("android", "app", "src", "main", "res", "values", "strings.xml");
+          const manifestPath = path.join("android", "app", "src", "main", "AndroidManifest.xml");
+
+          if (fs.existsSync(stringsPath)) {
+            let stringsXml = fs.readFileSync(stringsPath, "utf8");
+            if (stringsXml.includes("admob_app_id")) {
+              stringsXml = stringsXml.replace(
+                /<string name="admob_app_id">.*?<\/string>/s,
+                `<string name="admob_app_id">${admobAppId}</string>`
+              );
+            } else {
+              stringsXml = stringsXml.replace(
+                /<\/resources>/,
+                `    <string name="admob_app_id">${admobAppId}</string>\n</resources>`
+              );
+            }
+            fs.writeFileSync(stringsPath, stringsXml, "utf8");
+          }
+
+          if (fs.existsSync(manifestPath)) {
+            let manifestXml = fs.readFileSync(manifestPath, "utf8");
+            const metaTag = `        <meta-data\n            android:name="com.google.android.gms.ads.APPLICATION_ID"\n            android:value="@string/admob_app_id" />`;
+
+            if (manifestXml.includes("com.google.android.gms.ads.APPLICATION_ID")) {
+              manifestXml = manifestXml.replace(
+                /<meta-data\s+android:name="com.google.android.gms.ads.APPLICATION_ID"[\s\S]*?\/>/g,
+                metaTag.trim()
+              );
+            } else {
+              manifestXml = manifestXml.replace(
+                /(<application\b[^>]*>)/,
+                `$1\n${metaTag}`
+              );
+            }
+            fs.writeFileSync(manifestPath, manifestXml, "utf8");
+          }
+          '
+
+      - name: Build Debug APK
+        working-directory: android
+        run: chmod +x gradlew && ./gradlew assembleDebug
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: neon-dodge-apk
