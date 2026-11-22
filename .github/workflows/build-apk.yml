@@ -17,7 +17,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "npm"
 
       - name: Setup Java 21
         uses: actions/setup-java@v4
@@ -76,7 +75,7 @@ jobs:
                 `$1\n${metaTag}`
               );
             }
-            fs.writeFileSync(manifestPath, manifestXml, "utf8");
+            fs.writeFileSync(manifestXml, manifestXml, "utf8");
           }
           '
 
