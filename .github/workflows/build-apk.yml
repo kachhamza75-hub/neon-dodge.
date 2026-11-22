@@ -77,7 +77,7 @@ jobs:
 
       - name: Configure AdMob App ID in Android project
         run: |
-          node -e '
+          node <<'EOF'
           const fs = require("fs");
           const path = require("path");
 
@@ -94,4 +94,70 @@ jobs:
               }
             }
             return results;
-            
+          }
+
+          const stringsFiles = findFiles("android", "strings.xml");
+          for (const stringsPath of stringsFiles) {
+            let stringsXml = fs.readFileSync(stringsPath, "utf8");
+            if (stringsXml.includes("admob_app_id")) {
+              stringsXml = stringsXml.replace(
+                /<string name="admob_app_id">[\s\S]*?<\/string>/,
+                `<string name="admob_app_id">${admobAppId}</string>`
+              );
+            } else if (stringsXml.includes("</resources>")) {
+              stringsXml = stringsXml.replace(
+                /<\/resources>/,
+                `    <string name="admob_app_id">${admobAppId}</string>\n</resources>`
+              );
+            }
+            fs.writeFileSync(stringsPath, stringsXml, "utf8");
+          }
+
+          let manifestFiles = findFiles("android", "AndroidManifest.xml");
+          if (manifestFiles.length === 0) {
+            const fallbackManifest = path.join("android", "app", "src", "main", "AndroidManifest.xml");
+            fs.mkdirSync(path.dirname(fallbackManifest), { recursive: true });
+            fs.writeFileSync(
+              fallbackManifest,
+              `<?xml version="1.0" encoding="utf-8"?>\n<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <application\n        android:allowBackup="true"\n        android:label="@string/app_name"\n        android:supportsRtl="true"\n        android:theme="@style/AppTheme">\n        <meta-data\n            android:name="com.google.android.gms.ads.APPLICATION_ID"\n            android:value="${admobAppId}" />\n    </application>\n    <uses-permission android:name="android.permission.INTERNET" />\n</manifest>\n`,
+              "utf8"
+            );
+            manifestFiles = [fallbackManifest];
+          }
+
+          for (const manifestPath of manifestFiles) {
+            let manifestXml = fs.readFileSync(manifestPath, "utf8");
+            const metaTag = `        <meta-data\n            android:name="com.google.android.gms.ads.APPLICATION_ID"\n            android:value="${admobAppId}" />`;
+
+            if (manifestXml.includes("com.google.android.gms.ads.APPLICATION_ID")) {
+              manifestXml = manifestXml.replace(
+                /<meta-data\s+android:name="com.google.android.gms.ads.APPLICATION_ID"[\s\S]*?\/>/g,
+                metaTag.trim()
+              );
+            } else if (/<application\b[^>]*>/.test(manifestXml)) {
+              manifestXml = manifestXml.replace(
+                /(<application\b[^>]*>)/,
+                `$1\n${metaTag}`
+              );
+            }
+            fs.writeFileSync(manifestPath, manifestXml, "utf8");
+          }
+          EOF
+
+      - name: Build Debug APK
+        run: |
+          GRADLEW_FILE=$(find android -maxdepth 3 -name "gradlew" | head -n 1)
+          if [ -z "$GRADLEW_FILE" ]; then
+            echo "gradlew not found inside android directory"
+            exit 1
+          fi
+          GRADLE_DIR=$(dirname "$GRADLEW_FILE")
+          chmod +x "$GRADLEW_FILE"
+          (cd "$GRADLE_DIR" && ./gradlew assembleDebug)
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: neon-dodge-apk
+          path: android/**/build/outputs/apk/debug/app-debug.apk
+          
