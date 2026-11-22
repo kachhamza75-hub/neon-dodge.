@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Neon Dodge - تجنب العوائق</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+
+    body {
+      background-color: #07050f;
+      color: #ffffff;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    #gameWrapper {
+      position: relative;
+      width: 100%;
+      max-width: 480px;
+      height: 100%;
+      background: radial-gradient(circle at center, #140b29 0%, #06040c 100%);
+      border-left: 1px solid rgba(168, 85, 247, 0.25);
+      border-right: 1px solid rgba(168, 85, 247, 0.25);
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* شريط النقاط العلوي */
+    #hud {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      right: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .hud-box {
+      background: rgba(18, 10, 36, 0.8);
+      border: 1px solid #9333ea;
+      box-shadow: 0 0 12px rgba(147, 51, 234, 0.4);
+      padding: 8px 14px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: bold;
+      color: #e9d5ff;
+    }
+
+    .hud-box span {
+      color: #c084fc;
+      font-size: 18px;
+    }
+
+    /* مساحة إعلان البانر السفلي (محاكاة لمكان AdMob Banner) */
+    #adBannerSlot {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 50px;
+      background: rgba(10, 6, 20, 0.92);
+      border-top: 1px dashed rgba(168, 85, 247, 0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      color: #a855f7;
+      z-index: 6;
+    }
+
+    /* شاشات البداية والنهاية والإعلان */
+    .overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(6, 4, 12, 0.88);
+      backdrop-filter: blur(6px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+      z-index: 10;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    h1 {
+      font-size: 34px;
+      color: #d8b4fe;
+      text-shadow: 0 0 15px #a855f7, 0 0 30px #7e22ce;
+      margin-bottom: 10px;
+    }
+
+    p.subtitle {
+      color: #cbd5e1;
+      font-size: 15px;
+      line-height: 1.6;
+      margin-bottom: 24px;
+      max-width: 300px;
+    }
+
+    .btn {
+      width: 100%;
+      max-width: 260px;
+      padding: 14px 20px;
+      margin: 8px 0;
+      border: none;
+      border-radius: 14px;
+      font-size: 17px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
+    }
+
+    .btn:active {
+      transform: scale(0.96);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #9333ea, #6b21a8);
+      color: #fff;
+      box-shadow: 0 0 20px rgba(147, 51, 234, 0.65);
+      border: 1px solid #c084fc;
+    }
+
+    .btn-reward {
+      background: linear-gradient(135deg, #10b981, #047857);
+      color: #fff;
+      box-shadow: 0 0 18px rgba(16, 185, 129, 0.5);
+      border: 1px solid #6ee7b7;
+    }
+
+    .score-summary {
+      background: rgba(24, 13, 46, 0.9);
+      border: 1px solid #7e22ce;
+      border-radius: 16px;
+      padding: 16px 24px;
+      margin-bottom: 20px;
+      width: 100%;
+      max-width: 260px;
+    }
+
+    .score-summary div {
+      margin: 6px 0;
+      font-size: 16px;
+      color: #e2e8f0;
+    }
+
+    .score-summary strong {
+      color: #c084fc;
+      font-size: 20px;
+    }
+
+    /* شاشة محاكاة الإعلان بالمكافأة */
+    .ad-loader {
+      width: 54px;
+      height: 54px;
+      border: 4px solid rgba(168, 85, 247, 0.2);
+      border-top-color: #a855f7;
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+      margin-bottom: 16px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="gameWrapper">
+    <div id="hud">
+      <div class="hud-box">النقاط: <span id="scoreDisplay">0</span></div>
+      <div class="hud-box">الأعلى: <span id="bestDisplay">0</span></div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- مكان إعلان البانر في الأسفل -->
+    <div id="adBannerSlot">مساحة إعلان Banner (320×50)</div>
+
+    <!-- شاشة البداية -->
+    <div id="startScreen" class="overlay">
+      <h1>NEON DODGE</h1>
+      <p class="subtitle">اسحب إصبعك يميناً ويساراً لتفادي الكتل المتساقطة وجمع النقاط!</p>
+      <button id="startBtn" class="btn btn-primary">ابدأ اللعب</button>
+    </div>
+
+    <!-- شاشة الخسارة -->
+    <div id="gameOverScreen" class="overlay hidden">
+      <h1>انتهت الجولة!</h1>
+      <div class="score-summary">
+        <div>نقاطك: <strong id="finalScore">0</strong></div>
+        <div>أفضل نتيجة: <strong id="finalBest">0</strong></div>
+      </div>
+      <button id="rewardBtn" class="btn btn-reward">🎬 متابعة اللعب (إعلان)</button>
+      <button id="restartBtn" class="btn btn-primary">إعادة من البداية</button>
+    </div>
+
+    <!-- شاشة محاكاة الإعلان -->
+    <div id="adSimulationScreen" class="overlay hidden">
+      <div class="ad-loader"></div>
+      <h2 style="color:#d8b4fe; margin-bottom:8px;">جارٍ عرض الإعلان...</h2>
+      <p class="subtitle" id="adTimerText">ستحصل على فرصة ثانية خلال 3 ثوانٍ</p>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const scoreDisplay = document.getElementById('scoreDisplay');
+    const bestDisplay = document.getElementById('bestDisplay');
+    const finalScoreEl = document.getElementById('finalScore');
+    const finalBestEl = document.getElementById('finalBest');
+
+    const startScreen = document.getElementById('startScreen');
+    const gameOverScreen = document.getElementById('gameOverScreen');
+    const adSimulationScreen = document.getElementById('adSimulationScreen');
+    const adTimerText = document.getElementById('adTimerText');
+
+    const startBtn = document.getElementById('startBtn');
+    const restartBtn = document.getElementById('restartBtn');
+    const rewardBtn = document.getElementById('rewardBtn');
+
+    // ضبط أبعاد الكانفاس بدقة الشاشة
+    function resizeCanvas() {
+      const rect = canvas.parentElement.getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    // مؤثرات صوتية مدمجة باستخدام Web Audio API (بدون ملفات خارجية)
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playTone(freq, type, duration, vol = 0.1) {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+      gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + duration);
+    }
+
+    // حالة اللعبة
+    let isRunning = false;
+    let score = 0;
+    let bestScore = parseInt(localStorage.getItem('neonDodgeBest') || '0', 10);
+    bestDisplay.textContent = bestScore;
+
+    let speedMultiplier = 1;
+    let spawnTimer = 0;
+    let obstacles = [];
+    let particles = [];
+    let rewardUsed = false;
+    let shieldTimer = 0;
+
+    // اللاعب
+    const player = {
+      width: 44,
+      height: 44,
+      x: canvas.width / 2 - 22,
+      y: canvas.height - 125,
+      color: '#c084fc'
+    };
+
+    // التحكم باللمس والماوس
+    let isDragging = false;
+    let dragOffsetX = 0;
+
+    function handleStart(clientX) {
+      if (!isRunning) return;
+      isDragging = true;
+      const rect = canvas.getBoundingClientRect();
+      const touchX = clientX - rect.left;
+      dragOffsetX = touchX - player.x;
+    }
+
+    function handleMove(clientX) {
+      if (!isRunning || !isDragging) return;
+      const rect = canvas.getBoundingClientRect();
+      const touchX = clientX - rect.left;
+      player.x = touchX - dragOffsetX;
+
+      // إبقاء اللاعب داخل الحدود
+      if (player.x < 10) player.x = 10;
+      if (player.x + player.width > canvas.width - 10) {
+        player.x = canvas.width - 10 - player.width;
+      }
+    }
+
+    function handleEnd() {
+      isDragging = false;
+    }
+
+    canvas.addEventListener('touchstart', (e) => handleStart(e.touches[0].clientX), { passive: true });
+    canvas.addEventListener('touchmove', (e) => handleMove(e.touches[0].clientX), { passive: true });
+    canvas.addEventListener('touchend', handleEnd);
+
+    canvas.addEventListener('mousedown', (e) => handleStart(e.clientX));
+    window.addEventListener('mousemove', (e) => handleMove(e.clientX));
+    window.addEventListener('mouseup', handleEnd);
+
+    // إنشاء انفجار جزيئات
+    function createExplosion(x, y, color) {
+      for (let i = 0; i < 22; i++) {
+        particles.push({
+          x,
+          y,
+          vx: (Math.random() - 0.5) * 8,
+          vy: (Math.random() - 0.5) * 8,
+          size: Math.random() * 5 + 2,
+          alpha: 1,
+          color
+        });
+      }
+    }
+
+    // توليد عائق جديد
+    function spawnObstacle() {
+      const minW = 36;
+      const maxW = Math.min(110, canvas.width * 0.28);
+      const width = Math.floor(Math.random() * (maxW - minW + 1)) + minW;
+      const x = Math.random() * (canvas.width - width - 20) + 10;
+      const speed = (3.6 + Math.random() * 2.2) * speedMultiplier;
+
+      obstacles.push({
+        x,
+        y: -40,
+        width,
+        height: 26,
+        speed,
+        passed: false
+      });
+    }
+
+    // بدء لعبة جديدة
+    function startGame(keepProgress = false) {
+      if (!keepProgress) {
+        score = 0;
+        speedMultiplier = 1;
+        rewardUsed = false;
+        scoreDisplay.textContent = '0';
+      }
+      obstacles = [];
+      particles = [];
+      player.x = canvas.width / 2 - player.width / 2;
+      player.y = canvas.height - 125;
+      shieldTimer = keepProgress ? 120 : 0; // حماية مؤقتة بعد الإعلان
+
+      startScreen.classList.add('hidden');
+      gameOverScreen.classList.add('hidden');
+      adSimulationScreen.classList.add('hidden');
+
+      isRunning = true;
+      playTone(520, 'sine', 0.15);
+      requestAnimationFrame(gameLoop);
+    }
+
+    // إنهاء اللعبة
+    function triggerGameOver() {
+      isRunning = false;
+      playTone(150, 'sawtooth', 0.35, 0.15);
+      createExplosion(player.x + player.width / 2, player.y + player.height / 2, '#f43f5e');
+
+      if (score > bestScore) {
+        bestScore = score;
+        localStorage.setItem('neonDodgeBest', bestScore);
+        bestDisplay.textContent = bestScore;
+      }
+
+      finalScoreEl.textContent = score;
+      finalBestEl.textContent = bestScore;
+
+      // إظهار زر الإعلان بالمكافأة مرة واحدة في كل جولة
+      if (!rewardUsed && score > 0) {
+        rewardBtn.classList.remove('hidden');
+      } else {
+        rewardBtn.classList.add('hidden');
+      }
+
+      drawScene();
+      setTimeout(() => {
+        gameOverScreen.classList.remove('hidden');
+      }, 350);
+    }
+
+    // دالة ربط الإعلان بالمكافأة (هنا سنضع كود AdMob لاحقاً)
+    function showRewardedAd() {
+      gameOverScreen.classList.add('hidden');
+      adSimulationScreen.classList.remove('hidden');
+      let countdown = 3;
+      adTimerText.textContent = `ستحصل على فرصة ثانية خلال ${countdown} ثوانٍ`;
+
+      const interval = setInterval(() => {
+        countdown--;
+        if (countdown > 0) {
+          adTimerText.textContent = `ستحصل على فرصة ثانية خلال ${countdown} ثوانٍ`;
+        } else {
+          clearInterval(interval);
+          rewardUsed = true;
+          startGame(true); // استكمال اللعب بنفس النقاط
+        }
+      }, 1000);
+    }
+
+    // تحديث المنطق
+    function update() {
+      if (shieldTimer > 0) shieldTimer--;
+
+      spawnTimer++;
+      const spawnInterval = Math.max(22, Math.floor(52 / speedMultiplier));
+      if (spawnTimer >= spawnInterval) {
+        spawnObstacle();
+        spawnTimer = 0;
+      }
+
+      // تحديث العوائق
+      for (let i = obstacles.length - 1; i >= 0; i--) {
+        const obs = obstacles[i];
+        obs.y += obs.speed;
+
+        // احتساب النقاط عند تجاوز العائق
+        if (!obs.passed && obs.y > player.y + player.height) {
+          obs.passed = true;
+          score += 10;
+          scoreDisplay.textContent = score;
+          speedMultiplier = 1 + Math.min(1.6, score / 600);
+          playTone(680, 'triangle', 0.08, 0.06);
+        }
+
+        // فحص الاصطدام
+        if (
+          shieldTimer === 0 &&
+          player.x < obs.x + obs.width - 4 &&
+          player.x + player.width - 4 > obs.x &&
+          player.y < obs.y + obs.height - 4 &&
+          player.y + player.height - 4 > obs.y
+        ) {
+          triggerGameOver();
+          return;
+        }
+
+        if (obs.y > canvas.height) {
+          obstacles.splice(i, 1);
+        }
+      }
+
+      // تحديث الجزيئات
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.alpha -= 0.03;
+        if (p.alpha <= 0) particles.splice(i, 1);
+      }
+    }
+
+    // الرسم على الشاشة
+    function drawScene() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // رسم خطوط شبكة خلفية خفيفة
+      ctx.strokeStyle = 'rgba(168, 85, 247, 0.08)';
+      ctx.lineWidth = 1;
+      for (let x = 0; x < canvas.width; x += 40) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+      }
+
+      // رسم اللاعب
+      ctx.save();
+      ctx.shadowBlur = 18;
+      ctx.shadowColor = shieldTimer > 0 ? '#10b981' : '#a855f7';
+      ctx.fillStyle = shieldTimer > 0 ? '#34d399' : player.color;
+      ctx.beginPath();
+      ctx.roundRect(player.x, player.y, player.width, player.height, 10);
+      ctx.fill();
+
+      // عينان بسيطتان للشخصية
+      ctx.fillStyle = '#07050f';
+      ctx.fillRect(player.x + 10, player.y + 14, 6, 8);
+      ctx.fillRect(player.x + 28, player.y + 14, 6, 8);
+      ctx.restore();
+
+      // رسم العوائق
+      obstacles.forEach((obs) => {
+        ctx.save();
+        ctx.shadowBlur = 14;
+        ctx.shadowColor = '#f43f5e';
+        ctx.fillStyle = '#e11d48';
+        ctx.beginPath();
+        ctx.roundRect(obs.x, obs.y, obs.width, obs.height, 6);
+        ctx.fill();
+        ctx.restore();
+      });
+
+      // رسم الجزيئات
+      particles.forEach((p) => {
+        ctx.save();
+        ctx.globalAlpha = p.alpha;
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x, p.y, p.size, p.size);
+        ctx.restore();
+      });
+    }
+
+    function gameLoop() {
+      if (!isRunning) return;
+      update();
+      if (isRunning) {
+        drawScene();
+        requestAnimationFrame(gameLoop);
+      }
+    }
+
+    startBtn.addEventListener('click', () => startGame(false));
+    restartBtn.addEventListener('click', () => startGame(false));
+    rewardBtn.addEventListener('click', showRewardedAd);
+  </script>
+</body>
+  </html>
+  
