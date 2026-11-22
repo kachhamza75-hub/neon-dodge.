@@ -48,34 +48,18 @@ jobs:
 
       - name: Configure AdMob App ID for testing
         run: |
-          node -e '
-            const fs = require("fs");
-            const stringsPath = "android/app/src/main/res/values/strings.xml";
-            const manifestPath = "android/app/src/main/AndroidManifest.xml";
-            const testAppId = "ca-app-pub-3940256099942544~3347511713";
+          STRINGS_FILE="android/app/src/main/res/values/strings.xml"
+          MANIFEST_FILE="android/app/src/main/AndroidManifest.xml"
+          TEST_APP_ID="ca-app-pub-3940256099942544~3347511713"
 
-            if (fs.existsSync(stringsPath)) {
-              let stringsXml = fs.readFileSync(stringsPath, "utf8");
-              if (!stringsXml.includes("admob_app_id")) {
-                stringsXml = stringsXml.replace(
-                  "</resources>",
-                  `    <string name="admob_app_id">${testAppId}</string>\n</resources>`
-                );
-                fs.writeFileSync(stringsPath, stringsXml, "utf8");
-              }
-            }
+          if [ -f "$STRINGS_FILE" ] && ! grep -q "admob_app_id" "$STRINGS_FILE"; then
+            sed -i "s|</resources>|    <string name=\"admob_app_id\">${TEST_APP_ID}</string>\n</resources>|" "$STRINGS_FILE"
+          fi
 
-            if (fs.existsSync(manifestPath)) {
-              let manifestXml = fs.readFileSync(manifestPath, "utf8");
-              if (!manifestXml.includes("com.google.android.gms.ads.APPLICATION_ID")) {
-                manifestXml = manifestXml.replace(
-                  "</application>",
-                  `        <meta-data\n            android:name="com.google.android.gms.ads.APPLICATION_ID"\n            android:value="@string/admob_app_id" />\n    </application>`
-                );
-                fs.writeFileSync(manifestXml, manifestXml, "utf8");
-              }
-            }
-          '
+          if [ -f "$MANIFEST_FILE" ] && ! grep -q "com.google.android.gms.ads.APPLICATION_ID" "$MANIFEST_FILE"; then
+            sed -i 's|</application>|        <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="@string/admob_app_id" />\n    </application>|' "$MANIFEST_FILE"
+          fi
+
           npx cap sync android
 
       - name: Build Debug APK
