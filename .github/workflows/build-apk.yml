@@ -24,11 +24,42 @@ jobs:
           distribution: "temurin"
           java-version: "21"
 
-      - name: Install dependencies
-        run: npm install
-
-      - name: Ensure Capacitor Android platform exists
+      - name: Prepare package.json and install dependencies
         run: |
+          if [ ! -f "package.json" ]; then
+            cat <<'EOF' > package.json
+          {
+            "name": "neon-dodge",
+            "version": "1.0.0",
+            "description": "Neon Dodge Android Game",
+            "scripts": {
+              "cap:sync": "npx cap sync android"
+            },
+            "dependencies": {
+              "@capacitor/core": "^6.0.0",
+              "@capacitor/android": "^6.0.0",
+              "@capacitor-community/admob": "^6.0.0"
+            }
+          }
+          EOF
+          fi
+          npm install
+
+      - name: Ensure www/index.html and Capacitor Android setup
+        run: |
+          mkdir -p www
+          if [ ! -f "www/index.html" ]; then
+            echo "<h1>Neon Dodge</h1>" > www/index.html
+          fi
+          if [ ! -f "capacitor.config.json" ] && [ ! -f "capacitor.config.ts" ]; then
+            cat <<'EOF' > capacitor.config.json
+          {
+            "appId": "com.kachhamza75.neondodge",
+            "appName": "Neon Dodge",
+            "webDir": "www"
+          }
+          EOF
+          fi
           if [ ! -d "android" ]; then
             npx cap add android
           fi
