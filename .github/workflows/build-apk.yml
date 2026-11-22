@@ -13,10 +13,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Prepare web directory
+        run: |
+          mkdir -p www
+          if [ -f "index.html" ] && [ ! -f "www/index.html" ]; then
+            cp index.html www/index.html
+          fi
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -26,10 +33,49 @@ jobs:
 
       - name: Install Capacitor and AdMob plugin
         run: |
-          npm init -y
-          npm install @capacitor/core @capacitor/cli @capacitor/android @capacitor-community/admob
+          cat << 'EOF' > package.json
+          {
+            "name": "neon-dodge",
+            "version": "1.0.0",
+            "description": "Neon Dodge mobile game",
+            "main": "index.js",
+            "license": "MIT"
+          }
+          EOF
+          npm install @capacitor/core@latest @capacitor/cli@latest @capacitor/android@latest @capacitor-community/admob@latest
           npx cap init "Neon Dodge" "com.hamza.neondodge" --web-dir=www
           npx cap add android
+
+      - name: Configure AdMob App ID for testing
+        run: |
+          node -e '
+            const fs = require("fs");
+            const stringsPath = "android/app/src/main/res/values/strings.xml";
+            const manifestPath = "android/app/src/main/AndroidManifest.xml";
+            const testAppId = "ca-app-pub-3940256099942544~3347511713";
+
+            if (fs.existsSync(stringsPath)) {
+              let stringsXml = fs.readFileSync(stringsPath, "utf8");
+              if (!stringsXml.includes("admob_app_id")) {
+                stringsXml = stringsXml.replace(
+                  "</resources>",
+                  `    <string name="admob_app_id">${testAppId}</string>\n</resources>`
+                );
+                fs.writeFileSync(stringsPath, stringsXml, "utf8");
+              }
+            }
+
+            if (fs.existsSync(manifestPath)) {
+              let manifestXml = fs.readFileSync(manifestPath, "utf8");
+              if (!manifestXml.includes("com.google.android.gms.ads.APPLICATION_ID")) {
+                manifestXml = manifestXml.replace(
+                  "</application>",
+                  `        <meta-data\n            android:name="com.google.android.gms.ads.APPLICATION_ID"\n            android:value="@string/admob_app_id" />\n    </application>`
+                );
+                fs.writeFileSync(manifestXml, manifestXml, "utf8");
+              }
+            }
+          '
           npx cap sync android
 
       - name: Build Debug APK
