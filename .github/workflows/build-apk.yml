@@ -33,17 +33,21 @@ jobs:
             "version": "1.0.0",
             "description": "Neon Dodge Android Game",
             "scripts": {
-              "cap:sync": "npx cap sync android"
+              "cap:sync": "cap sync android"
             },
             "dependencies": {
               "@capacitor/core": "^6.0.0",
               "@capacitor/android": "^6.0.0",
               "@capacitor-community/admob": "^6.0.0"
+            },
+            "devDependencies": {
+              "@capacitor/cli": "^6.0.0"
             }
           }
           EOF
           fi
-          npm install
+          npm install --no-audit --no-fund
+          npm install --no-save --no-audit --no-fund @capacitor/cli@^6.0.0 @capacitor/core@^6.0.0 @capacitor/android@^6.0.0 @capacitor-community/admob@^6.0.0
 
       - name: Ensure www/index.html and Capacitor Android setup
         run: |
@@ -60,10 +64,16 @@ jobs:
           }
           EOF
           fi
-          if [ ! -d "android" ]; then
-            npx cap add android
+          CAP_BIN="./node_modules/.bin/cap"
+          if [ ! -f "$CAP_BIN" ]; then
+            echo "Capacitor CLI binary not found at $CAP_BIN"
+            ls -la node_modules/.bin || true
+            exit 1
           fi
-          npx cap sync android
+          if [ ! -d "android" ]; then
+            "$CAP_BIN" add android
+          fi
+          "$CAP_BIN" sync android
 
       - name: Configure AdMob App ID in Android project
         run: |
