@@ -82,51 +82,16 @@ jobs:
           const path = require("path");
 
           const admobAppId = "ca-app-pub-9252965845144085~9905485493";
-          const stringsPath = path.join("android", "app", "src", "main", "res", "values", "strings.xml");
-          const manifestPath = path.join("android", "app", "src", "main", "AndroidManifest.xml");
 
-          if (fs.existsSync(stringsPath)) {
-            let stringsXml = fs.readFileSync(stringsPath, "utf8");
-            if (stringsXml.includes("admob_app_id")) {
-              stringsXml = stringsXml.replace(
-                /<string name="admob_app_id">.*?<\/string>/s,
-                `<string name="admob_app_id">${admobAppId}</string>`
-              );
-            } else {
-              stringsXml = stringsXml.replace(
-                /<\/resources>/,
-                `    <string name="admob_app_id">${admobAppId}</string>\n</resources>`
-              );
+          function findFiles(dir, targetName, results = []) {
+            if (!fs.existsSync(dir)) return results;
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+              const fullPath = path.join(dir, entry.name);
+              if (entry.isDirectory()) {
+                findFiles(fullPath, targetName, results);
+              } else if (entry.name === targetName) {
+                results.push(fullPath);
+              }
             }
-            fs.writeFileSync(stringsPath, stringsXml, "utf8");
-          }
-
-          if (fs.existsSync(manifestPath)) {
-            let manifestXml = fs.readFileSync(manifestPath, "utf8");
-            const metaTag = `        <meta-data\n            android:name="com.google.android.gms.ads.APPLICATION_ID"\n            android:value="@string/admob_app_id" />`;
-
-            if (manifestXml.includes("com.google.android.gms.ads.APPLICATION_ID")) {
-              manifestXml = manifestXml.replace(
-                /<meta-data\s+android:name="com.google.android.gms.ads.APPLICATION_ID"[\s\S]*?\/>/g,
-                metaTag.trim()
-              );
-            } else {
-              manifestXml = manifestXml.replace(
-                /(<application\b[^>]*>)/,
-                `$1\n${metaTag}`
-              );
-            }
-            fs.writeFileSync(manifestXml, manifestXml, "utf8");
-          }
-          '
-
-      - name: Build Debug APK
-        working-directory: android
-        run: chmod +x gradlew && ./gradlew assembleDebug
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: neon-dodge-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
-          
+            return results;
+            
